@@ -116,37 +116,24 @@ status=$(curl --connect-timeout 3 -sX GET -w "%{http_code}" -o "${req}" "${url}"
 
 # Parse the HTML page with pup and collate torrent links and metadata using jq
 torrents_table=$(pup 'a[href*="/torrent/"], td.coll-4 json{}' < "${req}" | jq -r --arg base_url "${base_url}" '
-  . as $items |
-
-  # Calculate the number of torrent rows (half of total elements — links + metadata)
-  (length / 2) as $half |
-
-  # Iterate over each torrent row (0..$half-1)
-  [range($half) |
-
-    {
-      # Torrent name (link text)
-      name: $items[.].text,
-
-      # Size column (found in the second half of elements)
-      size: $items[$half + .].text,
-
-      # Seeders value (inside a child element of the second half)
-      seeders: $items[$half + .].children[].text,
-
-      # Full URL to torrent detail page
-      href: "\($base_url)\($items[.].href)"
-    }
-  ] |
-
-  # Format each torrent into CSV-style output
-  map("\(.href),\(.seeders),\(.size),\(.name)") |
-
   # Add header row
-  ["HREF,SEEDERS,SIZE,NAME"] + . |
-
-  .[]
-' | column -s, -t)
+  (["HREF","SEEDERS","SIZE","NAME"] | join("\u001F")),
+  (
+    # Bottom half contains torrent hrefs, top half contains metadata, split array in half and transpose to combine related entries
+    [.[:length/2], .[length/2:]] | transpose[] |
+    # Extract relevant fields from each entry
+    [
+      # Details URL
+      "\($base_url)\(.[0].href)",
+      # Seeders value
+      .[1].children[].text,
+      # Torrent size
+      .[1].text,
+      # Torrent name 
+      .[0].text
+    ] | join("\u001F")
+  )
+' | column -s$'\x1F' -t)
 
 # Exit if no torrents returned (just header)
 [ "$(echo "${torrents_table}" | wc -l)" -lt 2 ] && echo "No torrents found in ${CATEGORY}" && exit 1
