@@ -1,4 +1,4 @@
-# 1337
+# 1337x
 A minimal command-line interface for interactively searching and retrieving magnet links from [1337x.to](https://1337x.to).  
 
 ## Prerequisites
